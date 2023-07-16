@@ -1,0 +1,58 @@
+FineTune Vicuna Commands
+#Rent GPUs with setting of pytorch:latest, ssh connection
+#Allocate 80 GB of disk space
+
+ssh -p YOUR_PORT_NUMBER root@YOUR_IP
+
+pip3 install fschat
+git clone https://github.com/lm-sys/FastChat.git
+cd FastChat
+pip3 install --upgrade pip
+pip3 install -e .
+pip install einops
+cd ..
+git clone https://github.com/HazyResearch/flash-attention.git
+cd flash-attention
+conda install -c conda-forge cudatoolkit-dev
+sudo apt install g++
+python setup.py install
+cd ..
+pip install protobuf==3.20.3 --upgrade
+
+#ctrl b, then press d
+
+scp -P YOUR_PORT_NUMBER /YOUR_DATA_PATH root@YOUR_IP:FastChat/data/dummy_conversation.json
+
+ssh -p YOUR_PORT_NUMBER root@YOUR_IP
+
+cd FastChat
+
+torchrun --nproc_per_node=YOUR_NUMBER_OF_GPUS --master_port=20001 fastchat/train/train_mem.py \
+    --model_name_or_path yahma/llama-7b-hf  \
+    --data_path data/dummy_conversation.json \
+    --bf16 True \
+    --output_dir output_vicuna \
+    --num_train_epochs 3 \
+    --per_device_train_batch_size 2 \
+    --per_device_eval_batch_size 2 \
+    --gradient_accumulation_steps 16 \
+    --evaluation_strategy "no" \
+    --save_strategy "steps" \
+    --save_steps 1200 \
+    --save_total_limit 10 \
+    --learning_rate 2e-5 \
+    --weight_decay 0. \
+    --warmup_ratio 0.03 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --fsdp "full_shard auto_wrap" \
+    --fsdp_transformer_layer_cls_to_wrap 'LlamaDecoderLayer' \
+    --tf32 True \
+    --model_max_length 2048 \
+    --gradient_checkpointing True \
+    --lazy_preprocess True
+
+#AFTER TRAINING IS DONE
+apt-get install zip
+zip -r YOUR_MODEL_NAME.zip output_vicuna/
+scp -P YOUR_PORT_NUMBER root@YOUR_IP:FastChat/YOUR_MODEL_NAME /YOUR_MODEL_OUTPUT_PATH
